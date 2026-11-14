@@ -126,8 +126,7 @@ def main():
 
    print("4. Burning Captions with FFmpeg...")
     subtitle_style = "Alignment=10,FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
-    os.system(f'ffmpeg -y -i raw_video.mp4 -vf "subtitles=subs.srt:force_style=\'{subtitle_style}\'" -c:v libx264 -preset ultrafast -c:a aac -movflags +faststart final_video.mp4')
-
+   os.system(f'ffmpeg -y -i raw_video.mp4 -vf "subtitles=subs.srt:force_style=\'{subtitle_style}\'" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -movflags +faststart final_video.mp4')
     if webhook_url and "YOUR_MAKE" not in webhook_url:
         print("5. Sending Video to Make.com...")
         with open("final_video.mp4", "rb") as vf:
