@@ -9,7 +9,7 @@ import edge_tts
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
 VOICE = "en-US-AndrewNeural"
-MAKE_WEBHOOK_URL = "YOUR_MAKE_WEBHOOK_URL_HERE"
+MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/h3dlw6hnrepqnhk23rt3h99kthjz7m66"
 
 def format_srt_time(seconds):
     hrs = int(seconds // 3600)
