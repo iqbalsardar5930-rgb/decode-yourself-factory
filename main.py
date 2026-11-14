@@ -9,18 +9,17 @@ from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
 VOICE = "en-US-AndrewNeural"
 
-async def generate_audio_and_subs(script_text, audio_path, srt_path):
-    communicate = edge_tts.Communicate(script_text, VOICE)
+async def generate_audio_and_subs(text, audio_path, srt_path):
+    communicate = edge_tts.Communicate(text, "en-US-ChristopherNeural")
     submaker = edge_tts.SubMaker()
-    with open(audio_path, "wb") as file:
+    with open(audio_path, "wb") as audio_file:
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
-                file.write(chunk["data"])
+                audio_file.write(chunk["data"])
             elif chunk["type"] == "WordBoundary":
-                submaker.create_sub((chunk["offset"], chunk["duration"]), chunk["text"])
+                submaker.feed(chunk)
     with open(srt_path, "w", encoding="utf-8") as srt_file:
-        srt_file.write(submaker.generate_subs())
-
+        srt_file.write(submaker.get_srt())
 def download_image(prompt, filename):
     encoded_prompt = urllib.parse.quote(prompt + ", cinematic lighting, ultra detailed, 8k, vertical 9:16")
     url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&model=flux"
