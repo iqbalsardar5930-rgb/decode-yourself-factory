@@ -9,7 +9,7 @@ import edge_tts
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
 VOICE = "en-US-AndrewNeural"
-MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/h3dlw6hnrepqnhk23rt3h99kthjz7m66"
+MAKE_WEBHOOK_URL = "YOUR_MAKE_WEBHOOK_URL_HERE"
 
 def format_srt_time(seconds):
     hrs = int(seconds // 3600)
@@ -124,9 +124,10 @@ def main():
     video = concatenate_videoclips(clips, method="compose").set_audio(audio)
     video.write_videofile("raw_video.mp4", fps=24, codec="libx264", audio_codec="aac")
 
-   print("4. Burning Captions with FFmpeg...")
+    print("4. Burning Captions with FFmpeg (YouTube Optimized)...")
     subtitle_style = "Alignment=10,FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
-   os.system(f'ffmpeg -y -i raw_video.mp4 -vf "subtitles=subs.srt:force_style=\'{subtitle_style}\'" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -movflags +faststart final_video.mp4')
+    os.system(f'ffmpeg -y -i raw_video.mp4 -vf "subtitles=subs.srt:force_style=\'{subtitle_style}\'" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -movflags +faststart final_video.mp4')
+
     if webhook_url and "YOUR_MAKE" not in webhook_url:
         print("5. Sending Video to Make.com...")
         with open("final_video.mp4", "rb") as vf:
