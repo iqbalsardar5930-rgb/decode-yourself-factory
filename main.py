@@ -21,10 +21,10 @@ def format_srt_time(seconds):
 def build_fallback_srt(text, total_duration, srt_path):
     words = text.split()
     if not words:
-        return
+        words = ["Psychology", "Fact"]
     chunk_size = 4
     chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
-    step = total_duration / len(chunks)
+    step = total_duration / max(len(chunks), 1)
     with open(srt_path, "w", encoding="utf-8") as f:
         for idx, chunk in enumerate(chunks, start=1):
             start_t = format_srt_time((idx - 1) * step)
@@ -32,6 +32,8 @@ def build_fallback_srt(text, total_duration, srt_path):
             f.write(f"{idx}\n{start_t} --> {end_t}\n{chunk}\n\n")
 
 async def generate_audio_and_subs(text, audio_path, srt_path):
+    if not text.strip():
+        text = "Your brain remembers negative events five times stronger than positive ones."
     communicate = edge_tts.Communicate(text, VOICE)
     submaker = edge_tts.SubMaker()
     has_boundaries = False
@@ -75,33 +77,50 @@ def create_zoom_clip(img_path, duration):
     return final_clip
 
 def main():
+    parsed = {}
     event_path = os.environ.get("GITHUB_EVENT_PATH")
-    with open(event_path, "r", encoding="utf-8") as f:
-        event_data = json.load(f)
-
-    payload = event_data.get("client_payload", {})
-    ai_raw = payload.get("ai_data", "")
-
-    if isinstance(ai_raw, str) and ai_raw.strip():
-        cleaned = re.sub(r"^```(?:json)?|```$", "", ai_raw.strip(), flags=re.MULTILINE).strip()
-        parsed = json.loads(cleaned)
-    elif isinstance(ai_raw, dict):
-        parsed = ai_raw
-    else:
-        parsed = payload
+    if event_path and os.path.exists(event_path):
+        try:
+            with open(event_path, "r", encoding="utf-8") as f:
+                event_data = json.load(f)
+            payload = event_data.get("client_payload", {})
+            ai_raw = payload.get("ai_data", "")
+            if isinstance(ai_raw, str) and ai_raw.strip():
+                cleaned = re.sub(r"^```(?:json)?|```$", "", ai_raw.strip(), flags=re.MULTILINE).strip()
+                parsed = json.loads(cleaned)
+            elif isinstance(ai_raw, dict):
+                parsed = ai_raw
+            else:
+                parsed = payload
+        except Exception as e:
+            print(f"Error parsing event payload: {e}")
 
     topic = parsed.get("topic", "Psychology Fact")
-    script = parsed.get("script", "Your brain remembers negative events five times stronger than positive ones.")
+    script = parsed.get("script", "").strip()
+    if not script or len(script) < 3:
+        script = "Your brain remembers negative events five times stronger than positive ones."
+
     prompts = parsed.get("image_prompts", parsed.get("prompts", ["glowing human brain in dark room", "person looking in mirror deep thought"]))
     title = parsed.get("title", "Psychology Fact You Didn't Know #shorts")
     description = parsed.get("description", "Decode your mind every day. #psychology #shorts")
-    webhook_url = payload.get("webhook_url") or MAKE_WEBHOOK_URL
+    webhook_url = parsed.get("webhook_url") or MAKE_WEBHOOK_URL
 
     if isinstance(prompts, str):
         prompts = [p.strip() for p in prompts.split("|") if p.strip()]
+    if not prompts:
+        prompts = ["glowing human brain in dark room"]
 
     print("1. Generating Voiceover & Subtitles...")
-    has_subs = asyncio.run(generate_audio_and_subs(script, "voice.mp3", "subs.srt"))
+    try:
+        has_subs = asyncio.run(generate_audio_and_subs(script, "voice.mp3", "subs.srt"))
+    except Exception as e:
+        print(f"TTS Error encountered: {e}. Using fallback script.")
+        fallback_script = "Your brain remembers negative events five times stronger than positive ones."
+        has_subs = asyncio.run(generate_audio_and_subs(fallback_script, "voice.mp3", "subs.srt"))
+        script = fallback_script
+
+    if not os.path.exists("voice.mp3") or os.path.getsize("voice.mp3") < 1000:
+        raise RuntimeError("Voice audio file was not generated correctly.")
 
     audio = AudioFileClip("voice.mp3")
     total_duration = audio.duration
@@ -127,6 +146,9 @@ def main():
     print("4. Burning Captions with FFmpeg (YouTube Optimized)...")
     subtitle_style = "Alignment=10,FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
     os.system(f'ffmpeg -y -i raw_video.mp4 -vf "subtitles=subs.srt:force_style=\'{subtitle_style}\'" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -movflags +faststart final_video.mp4')
+
+    if not os.path.exists("final_video.mp4") or os.path.getsize("final_video.mp4") < 5000:
+        raise RuntimeError("Final video generation failed or file is empty.")
 
     if webhook_url and "YOUR_MAKE" not in webhook_url:
         print("5. Sending Video to Make.com...")
