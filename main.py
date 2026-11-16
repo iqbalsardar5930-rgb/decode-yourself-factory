@@ -10,6 +10,7 @@ from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 
 VOICE = "en-US-AndrewNeural"
 MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/h3dlw6hnrepqnhk23rt3h99kthjz7m66"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 def format_srt_time(seconds):
     hrs = int(seconds // 3600)
@@ -76,34 +77,76 @@ def create_zoom_clip(img_path, duration):
     )
     return final_clip
 
+def call_gemini_api(topic):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    prompt = f"""You are a viral YouTube Shorts & Facebook Reels scriptwriter for the channel "Decode Yourself".
+Create 1 unique, mind-blowing human psychology fact short video script (35-45 seconds spoken) based on this topic: "{topic}".
+
+STRICT RULES:
+1. Return ONLY valid raw JSON (no markdown, no ```json tags, no extra text).
+2. Use this exact JSON structure:
+{{
+  "topic": "Short 4-6 word topic name",
+  "title": "Catchy viral title under 60 chars #shorts",
+  "description": "Engaging 2-line caption with hashtags #psychology #mindset #shorts",
+  "script": "Full spoken voiceover script in simple, punchy English. Start with a strong hook.",
+  "image_prompts": [
+    "Vertical 9:16 dark moody cinematic illustration of scene 1, no text",
+    "Vertical 9:16 dark moody cinematic illustration of scene 2, no text",
+    "Vertical 9:16 dark moody cinematic illustration of scene 3, no text"
+  ]
+}}"""
+
+    headers = {"Content-Type": "application/json"}
+    data = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=60)
+        if response.status_code == 200:
+            res_json = response.json()
+            raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+            cleaned = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.MULTILINE).strip()
+            return json.loads(cleaned)
+    except Exception as e:
+        print(f"Gemini API Error: {e}")
+    
+    # Fallback if API fails
+    return {
+        "topic": topic,
+        "title": f"{topic} #shorts",
+        "description": f"Fascinating psychology fact about {topic}. #psychology #shorts",
+        "script": f"Here is an incredible psychological fact about {topic}. Your brain constantly processes information in ways you never realized, shaping your daily decisions.",
+        "image_prompts": [
+            "Vertical 9:16 dark moody cinematic illustration of human brain glowing",
+            "Vertical 9:16 dark moody cinematic illustration of person thinking deeply"
+        ]
+    }
+
 def main():
-    parsed = {}
+    topic = "Why people overthink at night"
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     if event_path and os.path.exists(event_path):
         try:
             with open(event_path, "r", encoding="utf-8") as f:
                 event_data = json.load(f)
             payload = event_data.get("client_payload", {})
-            ai_raw = payload.get("ai_data", "")
-            if isinstance(ai_raw, str) and ai_raw.strip():
-                cleaned = re.sub(r"^```(?:json)?|```$", "", ai_raw.strip(), flags=re.MULTILINE).strip()
-                parsed = json.loads(cleaned)
-            elif isinstance(ai_raw, dict):
-                parsed = ai_raw
-            else:
-                parsed = payload
+            topic = payload.get("topic", payload.get("ai_data", "Why people overthink at night"))
         except Exception as e:
             print(f"Error parsing event payload: {e}")
 
-    topic = parsed.get("topic", "Psychology Fact")
-    script = parsed.get("script", "").strip()
-    if not script or len(script) < 3:
-        script = "Your brain remembers negative events five times stronger than positive ones."
+    print(f"Generating content for topic: {topic}")
+    parsed = call_gemini_api(topic)
 
-    prompts = parsed.get("image_prompts", parsed.get("prompts", ["glowing human brain in dark room", "person looking in mirror deep thought"]))
-    title = parsed.get("title", "Psychology Fact You Didn't Know #shorts")
-    description = parsed.get("description", "Decode your mind every day. #psychology #shorts")
-    webhook_url = parsed.get("webhook_url") or MAKE_WEBHOOK_URL
+    script = parsed.get("script", "").strip()
+    prompts = parsed.get("image_prompts", ["glowing human brain in dark room"])
+    title = parsed.get("title", "Psychology Fact #shorts")
+    description = parsed.get("description", "Decode your mind. #psychology #shorts")
+    webhook_url = MAKE_WEBHOOK_URL
 
     if isinstance(prompts, str):
         prompts = [p.strip() for p in prompts.split("|") if p.strip()]
@@ -143,9 +186,11 @@ def main():
     video = concatenate_videoclips(clips, method="compose").set_audio(audio)
     video.write_videofile("raw_video.mp4", fps=24, codec="libx264", audio_codec="aac")
 
-    print("4. Burning Captions with FFmpeg (YouTube Optimized)...")
-    subtitle_style = "Alignment=10,FontName=Arial,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
-    os.system(f'ffmpeg -y -i raw_video.mp4 -vf "subtitles=subs.srt:force_style=\'{subtitle_style}\'" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -movflags +faststart final_video.mp4')
+    print("4. Burning Captions & Formatting for Facebook/YouTube via FFmpeg...")
+    subtitle_style = "Alignment=10,FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
+    vf_filter = f"subtitles=subs.srt:force_style='{subtitle_style}',scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
+    
+    os.system(f'ffmpeg -y -i raw_video.mp4 -vf "{vf_filter}" -c:v libx264 -preset medium -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart final_video.mp4')
 
     if not os.path.exists("final_video.mp4") or os.path.getsize("final_video.mp4") < 5000:
         raise RuntimeError("Final video generation failed or file is empty.")
