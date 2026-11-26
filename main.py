@@ -7,10 +7,15 @@ import urllib.parse
 import requests
 import edge_tts
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 VOICE = "en-US-AndrewNeural"
-MAKE_WEBHOOK_URL = "https://hook.eu1.make.com/h3dlw6hnrepqnhk23rt3h99kthjz7m66"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+YT_CLIENT_ID = os.environ.get("YT_CLIENT_ID", "")
+YT_CLIENT_SECRET = os.environ.get("YT_CLIENT_SECRET", "")
+YT_REFRESH_TOKEN = os.environ.get("YT_REFRESH_TOKEN", "")
 
 def format_srt_time(seconds):
     hrs = int(seconds // 3600)
@@ -34,7 +39,7 @@ def build_fallback_srt(text, total_duration, srt_path):
 
 async def generate_audio_and_subs(text, audio_path, srt_path):
     if not text.strip():
-        text = "Your brain remembers negative events five times stronger than positive ones."
+        text = "Your brain processes thousands of thoughts every single day, shaping your reality without you even realizing it."
     communicate = edge_tts.Communicate(text, VOICE)
     submaker = edge_tts.SubMaker()
     has_boundaries = False
@@ -78,10 +83,10 @@ def create_zoom_clip(img_path, duration):
     return final_clip
 
 def call_gemini_api(topic):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     
-    prompt = f"""You are a viral YouTube Shorts & Facebook Reels scriptwriter for the channel "Decode Yourself".
-Create 1 unique, mind-blowing human psychology fact short video script (35-45 seconds spoken) based on this topic: "{topic}".
+    prompt = f"""You are an elite viral YouTube Shorts scriptwriter for the channel "Decode Yourself".
+Create 1 unique, mind-blowing human psychology fact video script that is at least 60 seconds when spoken (approximately 130 to 150 words) based on this topic: "{topic}".
 
 STRICT RULES:
 1. Return ONLY valid raw JSON (no markdown, no ```json tags, no extra text).
@@ -90,11 +95,12 @@ STRICT RULES:
   "topic": "Short 4-6 word topic name",
   "title": "Catchy viral title under 60 chars #shorts",
   "description": "Engaging 2-line caption with hashtags #psychology #mindset #shorts",
-  "script": "Full spoken voiceover script in simple, punchy English. Start with a strong hook.",
+  "script": "Full, detailed spoken voiceover script in simple, punchy English lasting at least 60 seconds. Start with a powerful hook and build deep engagement.",
   "image_prompts": [
     "Vertical 9:16 dark moody cinematic illustration of scene 1, no text",
     "Vertical 9:16 dark moody cinematic illustration of scene 2, no text",
-    "Vertical 9:16 dark moody cinematic illustration of scene 3, no text"
+    "Vertical 9:16 dark moody cinematic illustration of scene 3, no text",
+    "Vertical 9:16 dark moody cinematic illustration of scene 4, no text"
   ]
 }}"""
 
@@ -115,17 +121,60 @@ STRICT RULES:
     except Exception as e:
         print(f"Gemini API Error: {e}")
     
-    # Fallback if API fails
     return {
         "topic": topic,
         "title": f"{topic} #shorts",
         "description": f"Fascinating psychology fact about {topic}. #psychology #shorts",
-        "script": f"Here is an incredible psychological fact about {topic}. Your brain constantly processes information in ways you never realized, shaping your daily decisions.",
+        "script": f"Here is an incredible psychological fact about {topic}. Your brain constantly processes information in ways you never realized, shaping your daily decisions, emotional responses, and long-term memory without your conscious awareness.",
         "image_prompts": [
             "Vertical 9:16 dark moody cinematic illustration of human brain glowing",
-            "Vertical 9:16 dark moody cinematic illustration of person thinking deeply"
+            "Vertical 9:16 dark moody cinematic illustration of person thinking deeply",
+            "Vertical 9:16 dark moody cinematic illustration of neural pathways",
+            "Vertical 9:16 dark moody cinematic illustration of calm night mind"
         ]
     }
+
+def upload_to_youtube(video_path, title, description):
+    if not (YT_CLIENT_ID and YT_CLIENT_SECRET and YT_REFRESH_TOKEN):
+        raise RuntimeError("YouTube API credentials (YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN) are missing in GitHub Secrets!")
+
+    creds = Credentials(
+        token=None,
+        refresh_token=YT_REFRESH_TOKEN,
+        token_uri="[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
+        client_id=YT_CLIENT_ID,
+        client_secret=YT_CLIENT_SECRET,
+        scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"]
+    )
+
+    youtube = build("youtube", "v3", credentials=creds)
+
+    body = {
+        "snippet": {
+            "title": title[:95],
+            "description": description,
+            "tags": ["psychology", "human psychology", "mindset", "shorts", "decode yourself"],
+            "categoryId": "27"
+        },
+        "status": {
+            "privacyStatus": "public",
+            "selfDeclaredMadeForKids": False
+        }
+    }
+
+    media = MediaFileUpload(video_path, chunksize=1024*1024, resumable=True, mimetype="video/mp4")
+    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+
+    print("Uploading directly to YouTube...")
+    response = None
+    while response is None:
+        status, response = request.next_chunk()
+        if status:
+            print(f"Upload progress: {int(status.progress() * 100)}%")
+
+    video_id = response.get("id")
+    print(f"SUCCESS! Video published on YouTube: [https://www.youtube.com/shorts/](https://www.youtube.com/shorts/){video_id}")
+    return video_id
 
 def main():
     topic = "Why people overthink at night"
@@ -139,14 +188,13 @@ def main():
         except Exception as e:
             print(f"Error parsing event payload: {e}")
 
-    print(f"Generating content for topic: {topic}")
+    print(f"Generating 60-second content for topic: {topic}")
     parsed = call_gemini_api(topic)
 
     script = parsed.get("script", "").strip()
     prompts = parsed.get("image_prompts", ["glowing human brain in dark room"])
     title = parsed.get("title", "Psychology Fact #shorts")
     description = parsed.get("description", "Decode your mind. #psychology #shorts")
-    webhook_url = MAKE_WEBHOOK_URL
 
     if isinstance(prompts, str):
         prompts = [p.strip() for p in prompts.split("|") if p.strip()]
@@ -158,7 +206,7 @@ def main():
         has_subs = asyncio.run(generate_audio_and_subs(script, "voice.mp3", "subs.srt"))
     except Exception as e:
         print(f"TTS Error encountered: {e}. Using fallback script.")
-        fallback_script = "Your brain remembers negative events five times stronger than positive ones."
+        fallback_script = "Your brain processes thousands of thoughts every single day, shaping your reality without you even realizing it."
         has_subs = asyncio.run(generate_audio_and_subs(fallback_script, "voice.mp3", "subs.srt"))
         script = fallback_script
 
@@ -172,7 +220,7 @@ def main():
 
     clip_duration = total_duration / max(len(prompts), 1)
 
-    print("2. Downloading AI Images...")
+    print(f"2. Downloading AI Images for {total_duration:.1f}s duration...")
     clips = []
     for idx, prompt in enumerate(prompts):
         img_file = f"img_{idx}.jpg"
@@ -182,29 +230,24 @@ def main():
     if not clips:
         raise RuntimeError("No images could be downloaded.")
 
-    print("3. Assembling Video with Zoom...")
+    print("3. Assembling Video with Cinematic Zoom...")
     video = concatenate_videoclips(clips, method="compose").set_audio(audio)
     video.write_videofile("raw_video.mp4", fps=24, codec="libx264", audio_codec="aac")
 
-    print("4. Burning Captions & Formatting for Facebook/YouTube via FFmpeg...")
+    print("4. Burning Professional Captions & Formatting via FFmpeg...")
     subtitle_style = "Alignment=10,FontName=Arial,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
     vf_filter = f"subtitles=subs.srt:force_style='{subtitle_style}',scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"
     
     os.system(f'ffmpeg -y -i raw_video.mp4 -vf "{vf_filter}" -c:v libx264 -preset medium -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart final_video.mp4')
 
-    if not os.path.exists("final_video.mp4") or os.path.getsize("final_video.mp4") < 5000:
-        raise RuntimeError("Final video generation failed or file is empty.")
+    if not os.path.exists("final_video.mp4") or os.path.getsize("final_video.mp4") < 50000:
+        raise RuntimeError("Final video generation failed or file is too small.")
 
-    if webhook_url and "YOUR_MAKE" not in webhook_url:
-        print("5. Sending Video to Make.com...")
-        with open("final_video.mp4", "rb") as vf:
-            requests.post(
-                webhook_url,
-                data={"topic": topic, "title": title, "description": description},
-                files={"video": ("final_video.mp4", vf, "video/mp4")},
-                timeout=120
-            )
-    print("Done!")
+    print(f"Video successfully created! File size: {os.path.getsize('final_video.mp4') / (1024*1024):.2f} MB")
+
+    print("5. Uploading Directly to YouTube...")
+    upload_to_youtube("final_video.mp4", title, description)
+    print("All Done!")
 
 if __name__ == "__main__":
     main()
