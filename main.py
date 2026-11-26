@@ -144,15 +144,14 @@ def upload_to_youtube(video_path, title, description):
     if not (client_id and client_secret and refresh_token):
         raise RuntimeError("YouTube API credentials are missing in GitHub Secrets!")
 
-    token_url = "https://" + "oauth2." + "[googleapis.com/token](https://googleapis.com/token)"
-    scope_url = "https://" + "www." + "[googleapis.com/auth/youtube.upload](https://googleapis.com/auth/youtube.upload)"
-
+    token_url = "https" + "://" + "oauth2" + "." + "googleapis" + "." + "com" + "/token"
+    scope_url = "https" + "://" + "www" + "." + "googleapis" + "." + "com" + "/auth/youtube.upload"
     creds = Credentials(
         token=None,
-        refresh_token=refresh_token,
+        refresh_token=YT_REFRESH_TOKEN.strip(),
         token_uri=token_url,
-        client_id=client_id,
-        client_secret=client_secret,
+        client_id=YT_CLIENT_ID.strip(),
+        client_secret=YT_CLIENT_SECRET.strip(),
         scopes=[scope_url]
     )
 
