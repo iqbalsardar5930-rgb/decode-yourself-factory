@@ -57,7 +57,7 @@ async def generate_audio_and_subs(text, audio_path, srt_path):
 
 def download_image(prompt, filename):
     encoded_prompt = urllib.parse.quote(prompt + ", cinematic lighting, ultra detailed, 8k, vertical 9:16")
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&model=flux"
+    url = "https" + f"://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&model=flux"
     for attempt in range(3):
         try:
             res = requests.get(url, timeout=60)
@@ -83,7 +83,7 @@ def create_zoom_clip(img_path, duration):
     return final_clip
 
 def call_gemini_api(topic):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = "https" + f"://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     prompt = f"""You are an elite viral YouTube Shorts scriptwriter for the channel "Decode Yourself".
 Create 1 unique, mind-blowing human psychology fact video script that is at least 60 seconds when spoken (approximately 130 to 150 words) based on this topic: "{topic}".
@@ -141,10 +141,10 @@ def upload_to_youtube(video_path, title, description):
     creds = Credentials(
         token=None,
         refresh_token=YT_REFRESH_TOKEN,
-        token_uri="[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
+        token_uri="https" + "://[oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
         client_id=YT_CLIENT_ID,
         client_secret=YT_CLIENT_SECRET,
-        scopes=["[https://www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"]
+        scopes=["https" + "://[www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"]
     )
 
     youtube = build("youtube", "v3", credentials=creds)
@@ -173,7 +173,7 @@ def upload_to_youtube(video_path, title, description):
             print(f"Upload progress: {int(status.progress() * 100)}%")
 
     video_id = response.get("id")
-    print(f"SUCCESS! Video published on YouTube: [https://www.youtube.com/shorts/](https://www.youtube.com/shorts/){video_id}")
+    print("SUCCESS! Video published on YouTube: https" + f"://[www.youtube.com/shorts/](https://www.youtube.com/shorts/){video_id}")
     return video_id
 
 def main():
