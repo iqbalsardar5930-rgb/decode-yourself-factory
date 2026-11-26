@@ -57,7 +57,8 @@ async def generate_audio_and_subs(text, audio_path, srt_path):
 
 def download_image(prompt, filename):
     encoded_prompt = urllib.parse.quote(prompt + ", cinematic lighting, ultra detailed, 8k, vertical 9:16")
-    url = "https" + f"://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1920&nologo=true&model=flux"
+    base_img_url = "https://" + "image." + "pollinations.ai/prompt/"
+    url = f"{base_img_url}{encoded_prompt}?width=1080&height=1920&nologo=true&model=flux"
     for attempt in range(3):
         try:
             res = requests.get(url, timeout=60)
@@ -83,7 +84,8 @@ def create_zoom_clip(img_path, duration):
     return final_clip
 
 def call_gemini_api(topic):
-    url = "https" + f"://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    base_gemini_url = "https://" + "generativelanguage." + "googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="
+    url = f"{base_gemini_url}{GEMINI_API_KEY}"
     
     prompt = f"""You are an elite viral YouTube Shorts scriptwriter for the channel "Decode Yourself".
 Create 1 unique, mind-blowing human psychology fact video script that is at least 60 seconds when spoken (approximately 130 to 150 words) based on this topic: "{topic}".
@@ -135,16 +137,23 @@ STRICT RULES:
     }
 
 def upload_to_youtube(video_path, title, description):
-    if not (YT_CLIENT_ID and YT_CLIENT_SECRET and YT_REFRESH_TOKEN):
-        raise RuntimeError("YouTube API credentials (YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN) are missing in GitHub Secrets!")
+    client_id = YT_CLIENT_ID.strip().strip("[]")
+    client_secret = YT_CLIENT_SECRET.strip().strip("[]")
+    refresh_token = YT_REFRESH_TOKEN.strip().strip("[]")
+
+    if not (client_id and client_secret and refresh_token):
+        raise RuntimeError("YouTube API credentials are missing in GitHub Secrets!")
+
+    token_url = "https://" + "oauth2." + "[googleapis.com/token](https://googleapis.com/token)"
+    scope_url = "https://" + "www." + "[googleapis.com/auth/youtube.upload](https://googleapis.com/auth/youtube.upload)"
 
     creds = Credentials(
         token=None,
-        refresh_token=YT_REFRESH_TOKEN,
-        token_uri="https" + "://[oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
-        client_id=YT_CLIENT_ID,
-        client_secret=YT_CLIENT_SECRET,
-        scopes=["https" + "://[www.googleapis.com/auth/youtube.upload](https://www.googleapis.com/auth/youtube.upload)"]
+        refresh_token=refresh_token,
+        token_uri=token_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=[scope_url]
     )
 
     youtube = build("youtube", "v3", credentials=creds)
@@ -173,7 +182,8 @@ def upload_to_youtube(video_path, title, description):
             print(f"Upload progress: {int(status.progress() * 100)}%")
 
     video_id = response.get("id")
-    print("SUCCESS! Video published on YouTube: https" + f"://[www.youtube.com/shorts/](https://www.youtube.com/shorts/){video_id}")
+    yt_short_base = "https://" + "www." + "[youtube.com/shorts/](https://youtube.com/shorts/)"
+    print(f"SUCCESS! Video published on YouTube: {yt_short_base}{video_id}")
     return video_id
 
 def main():
